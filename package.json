@@ -1,0 +1,38 @@
+{
+  "name": "stiletto-invoice-generator",
+  "version": "1.0.0",
+  "description": "Desktop app that turns Shopify order CSV exports into printable Mejuri invoices as PDFs",
+  "main": "main.js",
+  "author": "Stiletto Piercing Supply",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.stiletto.invoicegenerator",
+    "productName": "Stiletto Invoice Generator",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Office"
+    }
+  }
+}

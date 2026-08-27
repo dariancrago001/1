@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stiletto Invoice Generator</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #eee; min-height: 100vh; }
+#app-ui { max-width: 820px; margin: 0 auto; padding: 28px 20px; }
+.app-header { display: flex; align-items: baseline; gap: 12px; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 24px; }
+.app-header h1 { font-size: 18px; font-weight: bold; }
+.app-header span { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+.upload-zone { border: 2px dashed #bbb; border-radius: 6px; padding: 40px 24px; text-align: center; cursor: pointer; background: #fff; transition: border-color .2s; margin-bottom: 18px; }
+.upload-zone:hover, .upload-zone.drag-over { border-color: #c00; background: #fff5f4; }
+.upload-zone .icon { font-size: 32px; margin-bottom: 8px; }
+.upload-zone p { color: #666; font-size: 13px; }
+#file-input { display: none; }
+.list-head { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 8px; }
+.order-card { background: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 11px 14px; margin-bottom: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.order-card:hover { border-color: #333; }
+.order-card.selected { border-color: #c00; background: #fff5f4; }
+.order-card .onum { font-weight: bold; font-size: 13px; font-family: monospace; }
+.order-card .ometa { font-size: 11px; color: #555; font-family: monospace; margin-top: 2px; }
+.order-card .ototal { font-family: monospace; font-size: 13px; font-weight: bold; }
+.store-tag { display: inline-block; background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; border-radius: 3px; padding: 2px 7px; font-size: 11px; font-weight: bold; margin-left: 6px; }
+.store-tag.unmatched { background: #fff3e0; color: #e65100; border-color: #ffcc80; }
+.actions { display: flex; gap: 8px; margin: 14px 0; }
+.btn { background: #111; color: #fff; border: none; padding: 10px 22px; font-size: 13px; border-radius: 4px; cursor: pointer; }
+.btn:hover { background: #c00; }
+.btn-outline { background: #fff; color: #111; border: 1.5px solid #111; }
+.btn-outline:hover { background: #111; color: #fff; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: #fff; border-radius: 8px; padding: 28px; width: 460px; max-width: 95vw; }
+.modal h2 { font-size: 16px; margin-bottom: 6px; }
+.modal .sub { font-size: 12px; color: #888; margin-bottom: 18px; }
+.modal label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #444; }
+.modal select, .modal input[type=text] { width: 100%; padding: 9px 10px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 14px; }
+.modal select:focus, .modal input:focus { outline: none; border-color: #c00; }
+.custom-row { display: none; }
+.custom-row.visible { display: block; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+#invoice-preview { display: none; margin-top: 18px; }
+.inv-page { background: #fff; width: 760px; margin: 0 auto; padding: 28px 36px 36px 36px; font-family: Arial, sans-serif; font-size: 10pt; color: #000; border: 1px solid #aaa; }
+.inv-top { margin-bottom: 18px; }
+.inv-addr-row { display: flex; margin-bottom: 14px; }
+.inv-addr-col { flex: 1; line-height: 1.7; font-size: 10pt; }
+.inv-addr-col .lbl { font-weight: bold; }
+.inv-body { display: flex; gap: 20px; align-items: flex-start; margin-top: 8px; }
+.inv-meta { width: 195px; flex-shrink: 0; font-size: 10pt; line-height: 2; }
+.inv-meta .inv-id { font-size: 10.5pt; margin-bottom: 2px; }
+.inv-table { flex: 1; border-collapse: collapse; font-size: 10pt; width: 100%; }
+.inv-table thead th { border-bottom: 1px solid #000; padding: 3px 4px; text-align: left; font-weight: bold; }
+.inv-table thead th.r { text-align: right; }
+.inv-table tbody td { border: 1px solid #999; padding: 2px 4px; height: 20px; }
+.inv-table tbody td.r { text-align: right; font-family: monospace; }
+.inv-totals-wrap { display: flex; justify-content: flex-end; }
+.inv-totals table { border-collapse: collapse; font-size: 10pt; }
+.inv-totals td { padding: 2px 4px; }
+.inv-totals td.lbl { text-align: right; min-width: 130px; }
+.inv-totals td.amt { text-align: right; font-family: monospace; width: 85px; border-left: 1px solid #999; border-right: 1px solid #999; }
+.inv-totals .subtotal-row td.amt { border-top: 1px solid #999; }
+.inv-totals .shipping-row td.amt { border-bottom: 1px solid #999; }
+.inv-totals .total-row td { font-weight: bold; padding-top: 4px; }
+.inv-footer { margin-top: 14px; font-size: 10pt; line-height: 1.9; font-weight: bold; }
+@media print {
+  body { background: #fff; }
+  #app-ui { display: none !important; }
+  .modal-overlay { display: none !important; }
+  #invoice-preview { display: block !important; margin: 0; }
+  .inv-page { border: none; width: 100%; padding: 18px 24px; margin: 0; }
+  .no-print { display: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h2>Assign Store</h2>
+    <p class="sub" id="modal-sub"></p>
+    <label>Select store</label>
+    <select id="store-select"></select>
+    <div class="custom-row" id="custom-row">
+      <label>Store name</label>
+      <input type="text" id="custom-name" placeholder="e.g. Chestnut Hill">
+      <label>State / Province</label>
+      <input type="text" id="custom-state" placeholder="e.g. MA">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="cancel-btn">Cancel</button>
+      <button class="btn" id="confirm-btn">Confirm &amp; Generate PDF</button>
+    </div>
+  </div>
+</div>
+<div id="app-ui">
+  <div class="app-header">
+    <h1>Stiletto Invoice Generator</h1>
+    <span>Shopify CSV to PDF</span>
+  </div>
+  <div class="upload-zone" id="upload-zone">
+    <div class="icon">&#128196;</div>
+    <p><strong>Drop your Shopify orders CSV here</strong></p>
+    <p style="margin-top:4px;">or click to browse</p>
+    <input type="file" id="file-input" accept=".csv">
+  </div>
+  <div id="order-list" style="display:none;">
+    <div class="list-head">Click an order to generate its invoice</div>
+    <div id="order-cards"></div>
+  </div>
+  <div id="actions" class="actions" style="display:none;">
+    <button class="btn btn-outline no-print" id="back-btn">&#8592; Back</button>
+    <button class="btn no-print" id="pdf-btn">&#128438; Save as PDF</button>
+  </div>
+</div>
+<div id="invoice-preview">
+  <div class="inv-page" id="invoice-content"></div>
+</div>
+<script>
+var LOGO = "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";
+var STORES = [
+  {
+    "name": "12 South",
+    "email": "nashvillestoreleaders@mejuri.com",
+    "city": "Nashville",
+    "state": "TN",
+    "address": "2809 12th Ave S; Nashville, TN 37204",
+    "label": "12 South TN"
+  },
+  {
+    "name": "Abbot Kinney",
+    "email": "abbotkinneystoreleaders@mejuri.com",
+    "city": "Venice",
+    "state": "CA",
+    "address": "1110 Abbot Kinney Blvd; Venice, CA 90291",
+    "label": "Abbot Kinney CA"
+  },
+  {
+    "name": "Americana",
+    "email": "americanastoreleaders@mejuri.com",
+    "city": "Unit G2",
+    "state": "CA",
+    "address": "116 Caruso Ave, Unit G2; Glendale, CA 91210",
+    "label": "Americana CA"
+  },
+  {
+    "name": "Bellevue",
+    "email": "bellevuesquarestoreleaders@mejuri.com",
+    "city": "Unit L24",
+    "state": "",
+    "address": "124 Bellevue Square, Unit L24; Bellevue, Seattle, 98004",
+    "label": "Bellevue"
+  },
+  {
+    "name": "Bethesda",
+    "email": "bethesdarowstoreleaders@mejuri.com",
+    "city": "Bethesda",
+    "state": "MD",
+    "address": "7247 Woodmont Ave; Bethesda, MD 20814",
+    "label": "Bethesda MD"
+  },
+  {
+    "name": "Cherry Creek",
+    "email": "cherrycreekstoreleaders@mejuri.com",
+    "city": "Unit 144",
+    "state": "CO",
+    "address": "3000 E 1st Ave, Unit 144; Denver, CO 80206",
+    "label": "Cherry Creek CO"
+  },
+  {
+    "name": "Chestnut Hill",
+    "email": "chestnuthillstoreleaders@mejuri.com",
+    "city": "Suite 265",
+    "state": "MA",
+    "address": "27 Boylston St, Suite 265, Chestnut Hill, MA 02467",
+    "label": "Chestnut Hill MA"
+  },
+  {
+    "name": "Chestnut Street",
+    "email": "chestnutstoreleaders@mejuri.com",
+    "city": "San Francisco",
+    "state": "CA",
+    "address": "2050 Chestnut St; San Francisco, CA 94123",
+    "label": "Chestnut Street CA"
+  },
+  {
+    "name": "Domain",
+    "email": "atxstoreleaders@mejuri.com",
+    "city": "Suite 126",
+    "state": "TX",
+    "address": "11700 Domain Blvd, Suite 126; Austin, TX 78758",
+    "label": "Domain TX"
+  },
+  {
+    "name": "Flatiron",
+    "email": "flatironstoreleaders@mejuri.com",
+    "city": "New York",
+    "state": "NY",
+    "address": "144 Fifth Avenue; New York, NY 10011",
+    "label": "Flatiron NY"
+  },
+  {
+    "name": "Hayes Valley",
+    "email": "sfstoreleaders@mejuri.com",
+    "city": "San Francisco",
+    "state": "CA",
+    "address": "327A Hayes St; San Francisco, CA 94102",
+    "label": "Hayes Valley CA"
+  },
+  {
+    "name": "Melrose",
+    "email": "lastoreleaders@mejuri.com",
+    "city": "Los Angeles",
+    "state": "CA",
+    "address": "8404 Melrose Ave; Los Angeles, CA 90069",
+    "label": "Melrose CA"
+  },
+  {
+    "name": "Montrose",
+    "email": "montrosecollectivestoreleaders@mejuri.com",
+    "city": "Houston",
+    "state": "TX",
+    "address": "888 Westheimer Rd; Houston, TX 77006",
+    "label": "Montrose TX"
+  },
+  {
+    "name": "Newbury",
+    "email": "newburystoreleaders@mejuri.com",
+    "city": "Boston",
+    "state": "MA",
+    "address": "126 Newbury St; Boston, MA 02116",
+    "label": "Newbury MA"
+  },
+  {
+    "name": "Old Orchard",
+    "email": "oldorchardstoreleaders@mejuri.com",
+    "city": "Space B34 Skokie",
+    "state": "IL",
+    "address": "4999 Old Orchard Center, Space B34 Skokie, IL 60077",
+    "label": "Old Orchard IL"
+  },
+  {
+    "name": "Santana Row",
+    "email": "santanarowstoreleaders@mejuri.com",
+    "city": "San Jose",
+    "state": "CA",
+    "address": "333 Santana Row; San Jose, CA 95128",
+    "label": "Santana Row CA"
+  },
+  {
+    "name": "Seaport",
+    "email": "bosstoreleaders@mejuri.com",
+    "city": "Boston",
+    "state": "MA",
+    "address": "91 Pier Four Blvd; Boston, MA 02210",
+    "label": "Seaport MA"
+  },
+  {
+    "name": "Short Hills",
+    "email": "shorthillsstoreleaders@mejuri.com",
+    "city": "Suit B264",
+    "state": "NJ",
+    "address": "1200 Morris Turnpike, Suit B264; Short Hills, NJ 07078",
+    "label": "Short Hills NJ"
+  },
+  {
+    "name": "South Coast Plaza",
+    "email": "southcoastplazastoreleaders@mejuri.com",
+    "city": "Costa Mesa",
+    "state": "CA",
+    "address": "3333 Bristol St. Suite #2810; Costa Mesa, CA 92626",
+    "label": "South Coast Plaza CA"
+  },
+  {
+    "name": "Spring St",
+    "email": "nycstoreleaders@mejuri.com",
+    "city": "New York",
+    "state": "NY",
+    "address": "43 Spring St; New York, NY 10012",
+    "label": "Spring St NY"
+  },
+  {
+    "name": "Stanford",
+    "email": "stanfordstoreleaders@mejuri.com",
+    "city": "Palo Alto",
+    "state": "CA",
+    "address": "180 El Camino Real Suite 1150; Palo Alto, CA 94304",
+    "label": "Stanford CA"
+  },
+  {
+    "name": "UTC",
+    "email": "utcstoreleaders@mejuri.com",
+    "city": "Suite C-12",
+    "state": "CA",
+    "address": "4545 La Jolla Village Dr, Suite C-12; San Diego, CA 92122",
+    "label": "UTC CA"
+  },
+  {
+    "name": "UVillage",
+    "email": "uvillagestoreleaders@mejuri.com",
+    "city": "Seattle",
+    "state": "WA",
+    "address": "2621 NE University Village Street; Seattle, WA 98105",
+    "label": "UVillage WA"
+  },
+  {
+    "name": "Walnut",
+    "email": "walnutstoreleaders@mejuri.com",
+    "city": "Philadelphia",
+    "state": "PA",
+    "address": "1525 Walnut Street; Philadelphia, PA 19107",
+    "label": "Walnut PA"
+  },
+  {
+    "name": "West Loop",
+    "email": "westloopstoreleaders@mejuri.com",
+    "city": "Chicago",
+    "state": "IL",
+    "address": "940 W Randolph; Chicago, IL 60607",
+    "label": "West Loop IL"
+  },
+  {
+    "name": "Williamsburg",
+    "email": "williamsburgstoreleaders@mejuri.com",
+    "city": "Williamsburg",
+    "state": "NY",
+    "address": "107 N 6th Street; Williamsburg, NY 11249",
+    "label": "Williamsburg NY"
+  },
+  {
+    "name": "Wynwood",
+    "email": "wynwoodstoreleaders@mejuri.com",
+    "city": "Miami",
+    "state": "FL",
+    "address": "219 NW 25th St; Miami, FL 33127",
+    "label": "Wynwood FL"
+  },
+  {
+    "name": "Tysons Corner",
+    "email": "tysonscornerstoreleaders@mejuri.com",
+    "city": "VA 22102 unit 8017",
+    "state": "VA",
+    "address": "1961 CHAIN BRIDGE RD. TYSONS CORNER, VA 22102 unit 8017",
+    "label": "Tysons Corner VA"
+  },
+  {
+    "name": "Washington Square",
+    "email": "washingtonsquarestoreleaders@mejuri.com",
+    "city": "#H12\nPortland",
+    "state": "OR",
+    "address": "9534 SW Washington Square Rd., #H12\nPortland, OR  97223",
+    "label": "Washington Square OR"
+  },
+  {
+    "name": "Topanga",
+    "email": "topangastoreleaders@mejuri.com",
+    "city": "Suite 2070",
+    "state": "CA",
+    "address": "6600 Topanga Canyon BLVD, Suite 2070, Canoga Park, CA 91303",
+    "label": "Topanga CA"
+  },
+  {
+    "name": "The Westchester",
+    "email": "westchesterstoreleaders@mejuri.com",
+    "city": "SPACE 2470",
+    "state": "NY",
+    "address": "125 WESTCHESTER AVENUE, SPACE 2470, WHITE PLAINS, NY 10601",
+    "label": "The Westchester NY"
+  },
+  {
+    "name": "Kierland Commons",
+    "email": "kierlandstoreleaders@mejuri.com",
+    "city": "Suite #170B1A",
+    "state": "AZ",
+    "address": "15215 N Kierland Blvd., Suite #170B1A, Scottsdale, AZ 85254",
+    "label": "Kierland Commons AZ"
+  },
+  {
+    "name": "Broadway Plaza",
+    "email": "broadwayplazastoreleaders@mejuri.com",
+    "city": "CA 94596",
+    "state": "CA",
+    "address": "1235 Broadway Plaza Suite C44. Walnut Creek, CA 94596",
+    "label": "Broadway Plaza CA"
+  },
+  {
+    "name": "Aventura Mall",
+    "email": "aventurastoreleaders@mejuri.com",
+    "city": "Blvd. Space #1930 Aventura",
+    "state": "FL",
+    "address": "19565 Biscayne, Blvd. Space #1930 Aventura, FL 33180",
+    "label": "Aventura Mall FL"
+  },
+  {
+    "name": "M Street",
+    "email": "mstreetstoreleaders@mejuri.com",
+    "city": "George Town Washington DC 20007",
+    "state": "",
+    "address": "3225 M Street, George Town Washington DC 20007",
+    "label": "M Street"
+  },
+  {
+    "name": "King of Prussia",
+    "email": "kingofprussiastoreleaders@mejuri.com",
+    "city": "",
+    "state": "",
+    "address": "160 North Gulph Road Unit 2181G King Of Prussia PA",
+    "label": "King of Prussia"
+  },
+  {
+    "name": "Brickell",
+    "email": "brickellstoreleaders@mejuri.com",
+    "city": "MIAMI",
+    "state": "FL",
+    "address": "701 SOUTH MIAMI AVENUE, MIAMI, FL 33131 Suite #235",
+    "label": "Brickell FL"
+  },
+  {
+    "name": "Rush Street",
+    "email": "rushstoreleaders@mejuri.com",
+    "city": "IL 60611",
+    "state": "IL",
+    "address": "900 N Rush St Chicago, IL 60611, USA",
+    "label": "Rush Street IL"
+  },
+  {
+    "name": "Garden State Plaza",
+    "email": "gardenstatestoreleaders@mejuri.com",
+    "city": "Suite 2118",
+    "state": "NJ",
+    "address": "One Garden State Plaza Pkwy, Suite 2118, Paramus, NJ 07652",
+    "label": "Garden State Plaza NJ"
+  },
+  {
+    "name": "Roseville",
+    "email": "rosevillestoreleaders@mejuri.com",
+    "city": "suite 143",
+    "state": "CA",
+    "address": "1151 GALLERIA BLVD, suite 143, ROSEVILLE, CA 95678",
+    "label": "Roseville CA"
+  },
+  {
+    "name": "Lenox Square",
+    "email": "lenoxsquarestoreleaders@mejuri.com",
+    "city": "UNIT NO. 3002A",
+    "state": "GA",
+    "address": "3393 PEACHTREE RD NE, UNIT NO. 3002A, ATLANTA, GA 30326",
+    "label": "Lenox Square GA"
+  },
+{
+    "name": "Oakbrook",
+    "email": "oakbrookstoreleaders@mejuri.com",
+    "city": "Oakbrook",
+    "state": "IL",
+    "address": "32 Oakbrook Center, Oakbrook, IL 60523",
+    "label": "Oakbrook IL"
+  },
+  {
+    "name": "Century City",
+    "email": "centurycitystoreleaders@mejuri.com",
+    "city": "UNIT 1800",
+    "state": "CA",
+    "address": "10250 Santa Monica BLVD, UNIT 1800, Los Angeles, CA 90067",
+    "label": "Century City CA"
+  },
+  {
+    "name": "Covent Garden",
+    "email": "coventgardenstoreleaders@mejuri.com",
+    "city": "London",
+    "state": "UK",
+    "address": "30 King St; London, UK WC2E 8JD",
+    "label": "Covent Garden UK"
+  },
+  {
+    "name": "Kings Rd",
+    "email": "kingsroadstoreleaders@mejuri.com",
+    "city": "London",
+    "state": "UK",
+    "address": "104 King's Rd; London, UK SW3 4TZ",
+    "label": "Kings Rd UK"
+  },
+  {
+    "name": "Marylebone",
+    "email": "mybstoreleaders@mejuri.com",
+    "city": "London",
+    "state": "UK",
+    "address": "96 Marylebone High Street; London, UK, W1U 4RH",
+    "label": "Marylebone UK"
+  },
+  {
+    "name": "Chinook",
+    "email": "chinookstoreleaders@mejuri.com",
+    "city": "Calgary",
+    "state": "AB",
+    "address": "6455 Macleod Trail SW; Calgary, AB T2H 0K8",
+    "label": "Chinook AB"
+  },
+  {
+    "name": "Holts- Bloor Street",
+    "email": "bloorstreetstoreleaders@mejuri.com",
+    "city": "Toronto",
+    "state": "ON",
+    "address": "50 Bloor St W, Toronto, ON M4W 1A1, Canada",
+    "label": "Holts- Bloor Street ON"
+  },
+  {
+    "name": "Kitsilano",
+    "email": "kitsilanostoreleaders@mejuri.com",
+    "city": "Vancouver",
+    "state": "BC",
+    "address": "2166 W 4th Ave; Vancouver, BC V6K 1N6",
+    "label": "Kitsilano BC"
+  },
+  {
+    "name": "Ossington",
+    "email": "ossingtonstoreleaders@mejuri.com",
+    "city": "Toronto",
+    "state": "ON",
+    "address": "64 Ossington Ave; Toronto, ON M6J 2Y7",
+    "label": "Ossington ON"
+  },
+  {
+    "name": "Park Royal",
+    "email": "parkroyalstoreleaders@mejuri.com",
+    "city": "Unit H3",
+    "state": "BC",
+    "address": "925 Main Street, Unit H3; West Vancouver, BC V7T 2Z3",
+    "label": "Park Royal BC"
+  },
+  {
+    "name": "Peel",
+    "email": "peelstreetstoreleaders@mejuri.com",
+    "city": "Montreal",
+    "state": "",
+    "address": "1410 Peel St; Montreal, Quebec H3A 3T3",
+    "label": "Peel"
+  },
+  {
+    "name": "Square One",
+    "email": "squareonestoreleaders@mejuri.com",
+    "city": "Unit 2-253",
+    "state": "ON",
+    "address": "100 City Centre Dr, Unit 2-253; Mississauga, ON L5B 2C9, Canada",
+    "label": "Square One ON"
+  },
+  {
+    "name": "Yorkdale",
+    "email": "yorkdalestoreleaders@mejuri.com",
+    "city": "Unit 065",
+    "state": "ON",
+    "address": "3401 Dufferin St, Unit 065; Toronto, ON M6A 2T9",
+    "label": "Yorkdale ON"
+  },
+  {
+    "name": "The Galeries",
+    "email": "thegaleriesstoreleaders@mejuri.com",
+    "city": "Sydney NSW 2000",
+    "state": "",
+    "address": "500 George St, Sydney NSW 2000, Australia",
+    "label": "The Galeries"
+  }
+];
+var orders = {};
+var orderKeys = [];
+var pendingNum = null;
+var suffixTracker = {};
+// ── CSV PARSER ──
+function parseCSV(text) {
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  var delim = text.indexOf('\t') !== -1 && text.split('\n')[0].indexOf('\t') !== -1 ? '\t' : ',';
+  var records = [];
+  var cur = '', inQ = false, fields = [];
+  for (var i = 0; i < text.length; i++) {
+    var c = text[i];
+    if (c === '"') {
+      if (inQ && text[i+1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === delim && !inQ) {
+      fields.push(cur); cur = '';
+    } else if (c === '\n' && !inQ) {
+      fields.push(cur); cur = '';
+      records.push(fields); fields = [];
+    } else {
+      cur += c;
+    }
+  }
+  if (fields.length > 0 || cur) { fields.push(cur); records.push(fields); }
+  if (records.length < 2) return [];
+  var headers = records[0].map(function(h) { return h.trim(); });
+  var rows = [];
+  for (var r = 1; r < records.length; r++) {
+    var rec = records[r];
+    if (!rec.some(function(v) { return v.trim(); })) continue;
+    var row = {};
+    for (var j = 0; j < headers.length; j++) {
+      var v = (rec[j] || '').trim();
+      row[headers[j]] = (v === 'nan' || v === 'NaN') ? '' : v;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+// ── GROUP BY ORDER ──
+function groupOrders(rows) {
+  orders = {}; orderKeys = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var n = (row['Name'] || '').trim();
+    if (!n || !/^\d/.test(n)) continue;
+    if (!orders[n]) { orders[n] = { h: null, items: [], store: null }; orderKeys.push(n); }
+    if (!orders[n].h || (!orders[n].h['Billing Name'] && row['Billing Name'])) orders[n].h = row;
+    if (row['Lineitem name'] && row['Lineitem name'].trim()) orders[n].items.push(row);
+  }
+  for (var k = 0; k < orderKeys.length; k++) {
+    var key = orderKeys[k];
+    if (!orders[key].h) orders[key].h = orders[key].items[0] || {};
+  }
+}
+// ── STORE MATCHING ──
+function matchStore(h) {
+  var email = (h['Email'] || '').toLowerCase().trim();
+  var company = (h['Shipping Company'] || h['Billing Company'] || '').toLowerCase().trim();
+  for (var i = 0; i < STORES.length; i++) {
+    var s = STORES[i];
+    if (s.email && s.email.toLowerCase() === email) return s;
+  }
+  for (var i = 0; i < STORES.length; i++) {
+    var s = STORES[i];
+    var sn = s.name.toLowerCase().replace(/[^a-z]/g,'');
+    var co = company.replace(/[^a-z]/g,'');
+    if (co && sn && (co.indexOf(sn) !== -1 || sn.indexOf(co) !== -1)) return s;
+  }
+  return null;
+}
+// ── HELPERS ──
+function toNum(v) { var x = parseFloat(v); return isNaN(x) ? 0 : x; }
+function fmtDate(s) {
+  if (!s) return '';
+  var d = new Date(s); if (isNaN(d)) return '';
+  return pad(d.getMonth()+1) + '/' + pad(d.getDate()) + '/' + String(d.getFullYear()).slice(-2);
+}
+function todayStr() {
+  var d = new Date();
+  return pad(d.getMonth()+1) + '/' + pad(d.getDate()) + '/' + String(d.getFullYear()).slice(-2);
+}
+function dueStr() {
+  var d = new Date(); d.setDate(d.getDate()+30);
+  return pad(d.getMonth()+1) + '/' + pad(d.getDate()) + '/' + String(d.getFullYear()).slice(-2);
+}
+function pad(n) { return String(n).padStart(2,'0'); }
+function cleanZip(z) { return (z||'').replace(/^'/,''); }
+function calcSubtotal(items) {
+  var s = 0;
+  for (var i = 0; i < items.length; i++) s += toNum(items[i]['Lineitem quantity']) * toNum(items[i]['Lineitem price']);
+  return s;
+}
+function makeInvoiceId(storeName, suffix) {
+  var slug = (storeName||'').replace(/[^a-zA-Z0-9]/g,'').slice(0,14);
+  var date = todayStr().replace(/\//g,'');
+  return 'Mejuri-' + (slug||'Order') + '-' + date + (suffix||'');
+}
+// ── RENDER INVOICE ──
+function renderInvoice(orderNum, data, store, invoiceId) {
+  var h = data.h || {}, items = data.items;
+  var orderDate = fmtDate(h['Created at']);
+  var cleanNum = orderNum.replace(/^#/,'');
+  var shipping = toNum(h['Shipping']);
+  var subtotal = calcSubtotal(items);
+  var total = subtotal + shipping;
+  var storeLabel = store ? (store.name + (store.state ? ' ' + store.state : '')) : (h['Shipping Company']||h['Billing Company']||'');
+  var ROWS = 15;
+  var itemHtml = '';
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var qty = toNum(it['Lineitem quantity']), price = toNum(it['Lineitem price']);
+    itemHtml += '<tr><td>' + (it['Lineitem name']||'') + '</td><td class="r">' + qty + '</td><td class="r">' + price.toFixed(2) + '</td><td class="r">' + (qty*price).toFixed(2) + '</td></tr>';
+  }
+  for (var i = items.length; i < ROWS; i++) itemHtml += '<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>';
+  return '<div class="inv-top"><img src="data:image/png;base64,' + LOGO + '" style="height:68px;"></div>'
+    + '<div class="inv-addr-row">'
+    + '<div class="inv-addr-col"><span class="lbl">To:</span><br>Mejuri (US) Inc.<br>60 Bloor St W, 8th Floor<br>Toronto, ON M4W 1J2 Canada</div>'
+    + '<div class="inv-addr-col"><span class="lbl">From:</span><br>Stiletto Piercing Supply<br>989 Old Henderson Rd #C<br>Columbus OH 43220<br>614-674-6652</div>'
+    + '</div>'
+    + '<div class="inv-body">'
+    + '<div class="inv-meta">'
+    + '<div class="inv-id">Invoice: ' + invoiceId + '</div>'
+    + '<div>Stiletto Order#: ' + cleanNum + '</div>'
+    + '<div>Order: ' + orderDate + '</div>'
+    + '<div>Date: ' + todayStr() + '</div>'
+    + '<div>Due: ' + dueStr() + '</div>'
+    + '</div>'
+    + '<div style="flex:1;">'
+    + '<table class="inv-table"><thead><tr><th>Item</th><th class="r">#</th><th class="r">Cost</th><th class="r">Total</th></tr></thead>'
+    + '<tbody>' + itemHtml + '</tbody></table>'
+    + '<div class="inv-totals-wrap"><div class="inv-totals"><table><tbody>'
+    + '<tr class="subtotal-row"><td class="lbl">Item Subtotal</td><td class="amt">$' + subtotal.toFixed(2) + '</td></tr>'
+    + '<tr class="shipping-row"><td class="lbl">Shipping</td><td class="amt">$' + shipping.toFixed(2) + '</td></tr>'
+    + '<tr class="total-row"><td class="lbl">Total Due</td><td class="amt">$' + total.toFixed(2) + '</td></tr>'
+    + '</tbody></table></div></div>'
+    + '</div></div>'
+    + '<div class="inv-footer"><div>Store: ' + storeLabel + '</div><div>Currency: USD</div></div>';
+}
+// ── POPULATE STORE DROPDOWN ──
+function buildDropdown() {
+  var sel = document.getElementById('store-select');
+  sel.innerHTML = '<option value="">-- Pick a store --</option>';
+  for (var i = 0; i < STORES.length; i++) {
+    var s = STORES[i];
+    var opt = document.createElement('option');
+    opt.value = JSON.stringify({name: s.name, state: s.state});
+    opt.textContent = s.name + (s.state ? ' (' + s.state + ')' : '');
+    sel.appendChild(opt);
+  }
+  var custom = document.createElement('option');
+  custom.value = '__custom__';
+  custom.textContent = '+ Type a custom name...';
+  sel.appendChild(custom);
+}
+// ── MODAL ──
+document.getElementById('store-select').addEventListener('change', function() {
+  document.getElementById('custom-row').className = this.value === '__custom__' ? 'custom-row visible' : 'custom-row';
+});
+document.getElementById('cancel-btn').addEventListener('click', function() {
+  document.getElementById('modal-overlay').classList.remove('active');
+  pendingNum = null;
+});
+document.getElementById('confirm-btn').addEventListener('click', function() {
+  var sel = document.getElementById('store-select');
+  var store;
+  if (sel.value === '__custom__') {
+    var name = document.getElementById('custom-name').value.trim();
+    var state = document.getElementById('custom-state').value.trim().toUpperCase();
+    if (!name) { alert('Please enter a store name.'); return; }
+    store = {name: name, state: state};
+  } else if (sel.value) {
+    store = JSON.parse(sel.value);
+  } else {
+    alert('Please select a store.'); return;
+  }
+  if (!pendingNum) return;
+  // Build invoice ID with duplicate suffix
+  var baseId = makeInvoiceId(store.name, '');
+  if (!suffixTracker[baseId]) suffixTracker[baseId] = 0;
+  suffixTracker[baseId]++;
+  var count = suffixTracker[baseId];
+  var suffix = count > 1 ? String.fromCharCode(96 + count) : '';
+  var finalId = makeInvoiceId(store.name, suffix);
+  // Save store on order
+  orders[pendingNum].store = store;
+  // Update card
+  var card = document.querySelector('[data-order="' + pendingNum + '"]');
+  if (card) {
+    var tag = card.querySelector('.store-tag');
+    if (tag) { tag.textContent = store.name; tag.className = 'store-tag'; }
+    var meta = card.querySelector('.ometa');
+    if (meta) meta.textContent = finalId;
+  }
+  // Set PDF filename via page title
+  document.title = finalId;
+  // Render invoice
+  document.getElementById('invoice-content').innerHTML = renderInvoice(pendingNum, orders[pendingNum], store, finalId);
+  document.getElementById('invoice-preview').style.display = 'block';
+  document.getElementById('actions').style.display = 'flex';
+  // Close modal
+  document.getElementById('modal-overlay').classList.remove('active');
+  pendingNum = null;
+  document.getElementById('invoice-preview').scrollIntoView({behavior:'smooth', block:'start'});
+});
+// ── OPEN MODAL ──
+function openModal(num) {
+  pendingNum = num;
+  var h = orders[num].h || {};
+  var matched = orders[num].store;
+  var company = h['Shipping Company'] || h['Billing Company'] || '';
+  document.getElementById('modal-sub').textContent = matched
+    ? 'Order ' + num + ' matched "' + matched.name + '" — confirm or change.'
+    : 'No match found for order ' + num + ' (' + company + '). Please assign a store.';
+  buildDropdown();
+  var sel = document.getElementById('store-select');
+  if (matched) {
+    for (var i = 0; i < sel.options.length; i++) {
+      try {
+        var v = JSON.parse(sel.options[i].value);
+        if (v.name === matched.name) { sel.selectedIndex = i; break; }
+      } catch(e) {}
+    }
+  } else {
+    sel.selectedIndex = 0;
+  }
+  document.getElementById('custom-row').className = 'custom-row';
+  document.getElementById('modal-overlay').classList.add('active');
+}
+// ── FILE LOADING ──
+function handleFile(file) {
+  if (!file) return;
+  suffixTracker = {};
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var rows = parseCSV(e.target.result);
+      groupOrders(rows);
+      var container = document.getElementById('order-cards');
+      container.innerHTML = '';
+      for (var k = 0; k < orderKeys.length; k++) {
+        var num = orderKeys[k];
+        var o = orders[num];
+        var h = o.h || {};
+        var matched = matchStore(h);
+        o.store = matched;
+        var subtotal = calcSubtotal(o.items);
+        var shipping = toNum(h['Shipping']);
+        var total = subtotal + shipping;
+        var company = h['Shipping Company'] || h['Billing Company'] || h['Shipping Name'] || '';
+        var tagClass = matched ? 'store-tag' : 'store-tag unmatched';
+        var tagText = matched ? matched.name : '? unmatched';
+        var previewId = makeInvoiceId(matched ? matched.name : '', '');
+        var card = document.createElement('div');
+        card.className = 'order-card';
+        card.setAttribute('data-order', num);
+        card.innerHTML = '<div>'
+          + '<div class="onum">' + num + ' <span class="' + tagClass + '">' + tagText + '</span></div>'
+          + '<div class="ometa">' + previewId + '</div>'
+          + '</div>'
+          + '<div class="ototal">$' + total.toFixed(2) + '</div>';
+        (function(n) {
+          card.addEventListener('click', function() {
+            document.querySelectorAll('.order-card').forEach(function(c) { c.classList.remove('selected'); });
+            card.classList.add('selected');
+            openModal(n);
+          });
+        })(num);
+        container.appendChild(card);
+      }
+      document.getElementById('order-list').style.display = 'block';
+      document.getElementById('upload-zone').style.display = 'none';
+      document.getElementById('invoice-preview').style.display = 'none';
+      document.getElementById('actions').style.display = 'none';
+    } catch(err) {
+      alert('Error loading CSV: ' + err.message + '\n' + err.stack);
+    }
+  };
+  reader.readAsText(file);
+}
+document.getElementById('upload-zone').addEventListener('click', function() {
+  document.getElementById('file-input').click();
+});
+document.getElementById('upload-zone').addEventListener('dragover', function(e) {
+  e.preventDefault(); this.classList.add('drag-over');
+});
+document.getElementById('upload-zone').addEventListener('dragleave', function() {
+  this.classList.remove('drag-over');
+});
+document.getElementById('upload-zone').addEventListener('drop', function(e) {
+  e.preventDefault(); this.classList.remove('drag-over');
+  handleFile(e.dataTransfer.files[0]);
+});
+document.getElementById('file-input').addEventListener('change', function(e) {
+  handleFile(e.target.files[0]);
+});
+document.getElementById('back-btn').addEventListener('click', function() {
+  document.getElementById('invoice-preview').style.display = 'none';
+  document.getElementById('actions').style.display = 'none';
+  document.querySelectorAll('.order-card').forEach(function(c) { c.classList.remove('selected'); });
+});
+document.getElementById('pdf-btn').addEventListener('click', function() {
+  var name = document.title || 'invoice';
+  if (window.electronAPI && window.electronAPI.savePDF) {
+    window.electronAPI.savePDF(name);
+  } else {
+    window.print();
+  }
+});
+</script>
+</body>
+</html>
