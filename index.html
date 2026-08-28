@@ -595,7 +595,12 @@ function buildPdf(orderNum, data, store, invoiceId) {
   var top = 192;
   var meta = ['Invoice: ' + invoiceId, 'Stiletto Order#: ' + orderNum.replace(/^#/, ''),
               'Order: ' + fmtDate(h['Created at']), 'Date: ' + todayStr(), 'Due: ' + dueStr()];
-  for (var i = 0; i < meta.length; i++) doc.text(doc.splitTextToSize(meta[i], 150), M, top + i * 16);
+  var my = top;
+  for (var i = 0; i < meta.length; i++) {
+    var mlines = doc.splitTextToSize(meta[i], 150);
+    doc.text(mlines, M, my);
+    my += 12 * mlines.length + 4;
+  }
   // items table: x 200..576; cols Item | # | Cost | Total
   var x0 = 200, x1 = 440, x2 = 472, x3 = 524, x4 = 576, rh = 16;
   doc.setFont('helvetica', 'bold');
