@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stiletto Invoice Generator</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: Arial, sans-serif; background: #eee; display: flex; flex-direction: column; }
+.tab-bar { display: flex; align-items: center; gap: 6px; background: #111; padding: 8px 16px 0 16px; flex-shrink: 0; }
+.tab-bar .brand { color: #fff; font-size: 13px; font-weight: bold; letter-spacing: 1px; margin-right: 14px; padding-bottom: 8px; }
+.tab { border: none; background: #333; color: #bbb; font-size: 13px; font-weight: bold; padding: 9px 26px; border-radius: 6px 6px 0 0; cursor: pointer; }
+.tab:hover { color: #fff; }
+.tab.active { background: #eee; color: #111; }
+.tab.active.tab-mejuri { box-shadow: inset 0 3px 0 #c00; }
+.tab.active.tab-crea { box-shadow: inset 0 3px 0 #2E74B5; }
+.panes { flex: 1; position: relative; }
+.panes iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; display: none; }
+.panes iframe.active { display: block; }
+</style>
+</head>
+<body>
+<div class="tab-bar">
+  <span class="brand">STILETTO</span>
+  <button class="tab tab-mejuri" id="tab-mejuri">Mejuri</button>
+  <button class="tab tab-crea" id="tab-crea">Crea</button>
+</div>
+<div class="panes">
+  <iframe id="pane-mejuri" src="mejuri.html" title="Mejuri invoice generator"></iframe>
+  <iframe id="pane-crea" src="crea.html" title="Crea invoice generator"></iframe>
+</div>
+<script>
+// Forward PDF-save requests from either tab to the claude.ai download channel.
+var dlP = (window.claude && window.claude.use)
+  ? window.claude.use('downloads').catch(function() { return null; })
+  : Promise.resolve(null);
+window.addEventListener('message', function(ev) {
+  var d = ev.data;
+  if (!d || d.type !== 'stiletto-save-pdf') return;
+  var src = ev.source;
+  function reply(status) {
+    try { src.postMessage({ type: 'stiletto-save-result', id: d.id, status: status }, '*'); } catch (e) {}
+  }
+  dlP.then(function(dl) {
+    if (!dl) { reply('no-channel'); return; }
+    dl.save({ filename: d.filename, data: d.data })
+      .then(function() { reply('saved'); })
+      .catch(function(err) { reply((err && err.code) || 'error'); });
+  });
+});
+// Tabs: show one app at a time, keep both alive so nothing resets when switching.
+function selectTab(name) {
+  ['mejuri', 'crea'].forEach(function(n) {
+    document.getElementById('tab-' + n).classList.toggle('active', n === name);
+    document.getElementById('pane-' + n).classList.toggle('active', n === name);
+  });
+  try { localStorage.setItem('stilettoTab', name); } catch (e) {}
+}
+document.getElementById('tab-mejuri').addEventListener('click', function() { selectTab('mejuri'); });
+document.getElementById('tab-crea').addEventListener('click', function() { selectTab('crea'); });
+var startTab = 'mejuri';
+try { startTab = localStorage.getItem('stilettoTab') || 'mejuri'; } catch (e) {}
+selectTab(startTab === 'crea' ? 'crea' : 'mejuri');
+</script>
+</body>
+</html>

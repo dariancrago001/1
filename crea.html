@@ -405,6 +405,27 @@ function buildPdf() {
   doc.setProperties({ title: 'M. Crea ' + fileStamp() });
   return doc;
 }
+// Inside the tabbed shell (an iframe), forward the save request to the parent page,
+// which holds the claude.ai download channel. Falls back to a direct download.
+function bridgeSave(fname, buf, doc) {
+  return new Promise(function(resolve) {
+    var id = Math.random().toString(36).slice(2);
+    var done = false;
+    function onMsg(ev) {
+      var d = ev.data;
+      if (!d || d.type !== 'stiletto-save-result' || d.id !== id) return;
+      done = true;
+      window.removeEventListener('message', onMsg);
+      if (d.status === 'no-channel') { doc.save(fname); resolve('saved'); }
+      else resolve(d.status);
+    }
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: 'stiletto-save-pdf', id: id, filename: fname, data: buf }, '*');
+    setTimeout(function() {
+      if (!done) { window.removeEventListener('message', onMsg); doc.save(fname); resolve('saved'); }
+    }, 3000);
+  });
+}
 function savePdf() {
   var doc = buildPdf();
   if (!doc) { alert('PDF library did not load — check your internet connection and refresh.'); return Promise.resolve('nopdf'); }
@@ -416,6 +437,7 @@ function savePdf() {
         .catch(function(err) { return (err && err.code) || 'error'; });
     }
     if (window.electronAPI && window.electronAPI.savePDF) return 'electron';
+    if (window.parent !== window) return bridgeSave(fname, doc.output('arraybuffer'), doc);
     doc.save(fname);
     return 'saved';
   });

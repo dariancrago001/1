@@ -664,6 +664,27 @@ function setCardStatus(num, invoiceId, status) {
   var meta = card.querySelector('.ometa');
   if (meta) meta.textContent = invoiceId + (status ? ' — ' + status : '');
 }
+// Inside the tabbed shell (an iframe), forward the save request to the parent page,
+// which holds the claude.ai download channel. Falls back to a direct download.
+function bridgeSave(fname, buf, doc) {
+  return new Promise(function(resolve) {
+    var id = Math.random().toString(36).slice(2);
+    var done = false;
+    function onMsg(ev) {
+      var d = ev.data;
+      if (!d || d.type !== 'stiletto-save-result' || d.id !== id) return;
+      done = true;
+      window.removeEventListener('message', onMsg);
+      if (d.status === 'no-channel') { doc.save(fname); resolve('saved'); }
+      else resolve(d.status);
+    }
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: 'stiletto-save-pdf', id: id, filename: fname, data: buf }, '*');
+    setTimeout(function() {
+      if (!done) { window.removeEventListener('message', onMsg); doc.save(fname); resolve('saved'); }
+    }, 3000);
+  });
+}
 // Deliver a PDF: artifact downloads capability, else Electron, else plain browser download.
 function savePdf(num) {
   var o = orders[num];
@@ -682,6 +703,12 @@ function savePdf(num) {
         });
     }
     if (window.electronAPI && window.electronAPI.savePDF) return 'electron';
+    if (window.parent !== window) {
+      return bridgeSave(fname, doc.output('arraybuffer'), doc).then(function(status) {
+        setCardStatus(num, o.invoiceId, status === 'saved' ? 'PDF saved ✓' : (status === 'declined' ? 'PDF ready (declined)' : 'PDF ready'));
+        return status;
+      });
+    }
     doc.save(fname);
     setCardStatus(num, o.invoiceId, 'PDF saved ✓');
     return 'saved';
